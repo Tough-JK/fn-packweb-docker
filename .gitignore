@@ -1,0 +1,10 @@
+```gitignore
+data/output/
+data/cache/
+data/fnpack/fnpack
+fnos_output/
+__pycache__/
+*.pyc
+.streamlit/
+.DS_Store
+Thumbs.db
