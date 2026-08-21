@@ -1,18 +1,13 @@
-version: "3.8"
-
 services:
   fnos-pack:
-    build: .
+    image: ghcr.io/tough-jk/fn-packweb-docker:latest
     container_name: fnos-pack
     restart: unless-stopped
     ports:
       - "8501:8501"
     volumes:
-      # fnpack 二进制存放目录（只读更安全）
       - ./data/fnpack:/data/fnpack:ro
-      # 生成的项目和 .fpk 输出
       - ./data/output:/data/output
-      # 缓存目录（可选）
       - ./data/cache:/data/cache
     environment:
       - FNPACK_PATH=/data/fnpack/fnpack
