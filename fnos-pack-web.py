@@ -297,7 +297,7 @@ def find_fpk_files(search_dirs: List[Path], appname: str) -> List[Path]:
 # ==================== 页面 ====================
 
 st.title("📦 飞牛 fnOS Docker Compose → .fpk 打包工具")
-st.markdown("自行下载对应的二进制文件到Pack")
+st.markdown("固定目录生成，避免临时目录问题")
 st.divider()
 
 col1, col2 = st.columns([1, 1])
