@@ -19,8 +19,8 @@ import io
 st.set_page_config(
     page_title="飞牛 fnOS 打包工具",
     page_icon="📦",
-    layout="wide",
-    initial_sidebar_state="expanded"
+    layout="centered",
+    initial_sidebar_state="collapsed"
 )
 
 # 固定输出目录（在当前工作目录下）
@@ -296,8 +296,22 @@ def find_fpk_files(search_dirs: List[Path], appname: str) -> List[Path]:
 
 # ==================== 页面 ====================
 
-st.title("📦 飞牛 fnOS Docker Compose → .fpk 打包工具")
-st.markdown("固定目录生成，避免临时目录问题")
+st.header("📦 飞牛 fnOS Docker Compose → .fpk 打包工具")
+st.caption("固定目录生成，避免临时目录问题 · 支持拖拽上传 docker-compose + 图标一键打包")
+
+st.info(
+    """
+    **使用前请先下载 fnpack 打包工具**  
+    官方下载与说明：[https://developer.fnnas.com/docs/cli/fnpack/](https://developer.fnnas.com/docs/cli/fnpack/)
+
+    - **Linux x86**：`fnpack-*-linux-amd64`
+    - **Linux ARM**：`fnpack-*-linux-arm64`
+    - Windows / macOS 版本仅用于本机，**Docker 容器内必须使用 Linux 版**
+    - 下载后放到宿主机 `./data/fnpack/` 目录（或设置环境变量 `FNPACK_PATH`）
+    """,
+    icon="📦"
+)
+
 st.divider()
 
 col1, col2 = st.columns([1, 1])
