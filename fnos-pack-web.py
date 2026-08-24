@@ -6,7 +6,6 @@
 """
 
 import os
-import sys
 import shutil
 import subprocess
 import zipfile
@@ -26,6 +25,7 @@ st.set_page_config(
 
 # 固定输出目录（在当前工作目录下）
 OUTPUT_ROOT = Path(os.environ.get("OUTPUT_ROOT", "fnos_output")).resolve()
+
 
 def find_fnpack() -> Optional[str]:
     # 优先使用环境变量指定的路径（Docker 部署）
@@ -51,6 +51,7 @@ def find_fnpack() -> Optional[str]:
             return str(p.resolve())
     return None
 
+
 def process_icon(img: Image.Image, dest_dir: Path) -> bool:
     try:
         if img.mode in ("P", "LA"):
@@ -58,7 +59,7 @@ def process_icon(img: Image.Image, dest_dir: Path) -> bool:
         elif img.mode != "RGBA":
             img = img.convert("RGBA")
 
-        resample = Image.Resampling.LANCZOS if hasattr(Image, 'Resampling') else Image.LANCZOS
+        resample = Image.Resampling.LANCZOS if hasattr(Image, "Resampling") else Image.LANCZOS
 
         def make_icon(size: int, filename: str, target_dir: Path):
             icon = img.copy()
@@ -82,6 +83,7 @@ def process_icon(img: Image.Image, dest_dir: Path) -> bool:
         st.error(f"图标处理失败: {e}")
         return False
 
+
 def create_project_structure(
     base: Path,
     info: Dict[str, Any],
@@ -90,19 +92,20 @@ def create_project_structure(
     icon_img: Optional[Image.Image]
 ):
     app_name = info["appname"]
-    launch_name = f"{app_name}.Application"
+    launch_name = f"{app_name}.main"
 
     # 清理旧目录
     if base.exists():
         shutil.rmtree(base)
-
     (base / "app" / "docker").mkdir(parents=True, exist_ok=True)
     (base / "cmd").mkdir(parents=True, exist_ok=True)
     (base / "config").mkdir(parents=True, exist_ok=True)
-    (base / "wizard").mkdir(parents=True, exist_ok=True)
 
     # 1. docker-compose.yaml
-    (base / "app" / "docker" / "docker-compose.yaml").write_text(compose_content, encoding="utf-8")
+    (base / "app" / "docker" / "docker-compose.yaml").write_text(
+        compose_content,
+        encoding="utf-8"
+    )
 
     # 2. manifest
     manifest_lines = [
@@ -111,56 +114,102 @@ def create_project_structure(
         f"display_name={info['display_name']}",
         f"desc={info['desc']}",
         "platform=x86",
-        "arch=x86_64",
         "source=thirdparty",
         f"maintainer={info['maintainer']}",
         f"maintainer_url={info.get('maintainer_url', '')}",
         f"distributor={info.get('distributor', info['maintainer'])}",
         f"distributor_url={info.get('distributor_url', '')}",
         f"helpurl={info.get('helpurl', '')}",
-        "os_min_version=1.0.0",
+        "os_min_version=1.1.8",
         f"service_port={info['service_port']}",
     ]
     if with_ui:
         manifest_lines.append("desktop_uidir=ui")
         manifest_lines.append(f"desktop_applaunchname={launch_name}")
 
-    (base / "manifest").write_text("\n".join(manifest_lines) + "\n", encoding="utf-8")
+    (base / "manifest").write_text(
+        "\n".join(manifest_lines) + "\n",
+        encoding="utf-8"
+    )
 
     # 3. privilege & resource
-    (base / "config" / "privilege").write_text("""{
+    (base / "config" / "privilege").write_text(
+        """{
   "defaults": {
     "run-as": "root"
   }
 }
-""", encoding="utf-8")
+""",
+        encoding="utf-8"
+    )
 
-    (base / "config" / "resource").write_text("""{
-  "docker-project": {}
-}
-""", encoding="utf-8")
+    resource = {
+        "docker-project": {
+            "projects": [
+                {
+                    "name": app_name,
+                    "path": "docker"
+                }
+            ]
+        }
+    }
+    (base / "config" / "resource").write_text(
+        json.dumps(resource, ensure_ascii=False, indent=2),
+        encoding="utf-8"
+    )
 
     # 4. cmd 脚本
-    main_script = """#!/bin/bash
+    # Docker Compose 项目的生命周期由 fnOS Docker Project 管理。
+    # 这里仅提供状态检查，避免重复执行 docker compose up/down。
+    main_script = r'''#!/bin/bash
+
+FILE_PATH="${TRIM_APPDEST}/docker/docker-compose.yaml"
+
+is_docker_running() {
+    DOCKER_NAME=""
+
+    if [ -f "$FILE_PATH" ]; then
+        DOCKER_NAME=$(grep "container_name" "$FILE_PATH" | head -n 1 | awk -F ':' '{print $2}' | xargs)
+    fi
+
+    if [ -n "$DOCKER_NAME" ]; then
+        docker inspect "$DOCKER_NAME" 2>/dev/null |
+            grep -q '"Status": "running",'
+        return $?
+    fi
+
+    # 如果 compose 中没有 container_name，则回退到 compose ps。
+    if command -v docker >/dev/null 2>&1; then
+        PROJECT_DIR="${TRIM_APPDEST}/docker"
+        if [ -d "$PROJECT_DIR" ]; then
+            cd "$PROJECT_DIR" || return 1
+            docker compose ps --status running --format '{{.Name}}' 2>/dev/null | grep -q .
+            return $?
+        fi
+    fi
+
+    return 1
+}
+
 case "$1" in
-  start)
-    cd "$TRIM_APPDEST/docker" || exit 1
-    docker compose up -d
-    ;;
-  stop)
-    cd "$TRIM_APPDEST/docker" || exit 1
-    docker compose down
-    ;;
-  status)
-    cd "$TRIM_APPDEST/docker" || exit 1
-    docker compose ps --status running | grep -q . && echo "running" || echo "stopped"
-    ;;
-  *)
-    echo "Usage: $0 {start|stop|status}"
-    exit 1
-    ;;
+    start)
+        exit 0
+        ;;
+    stop)
+        exit 0
+        ;;
+    status)
+        if is_docker_running; then
+            exit 0
+        else
+            exit 3
+        fi
+        ;;
+    *)
+        exit 1
+        ;;
 esac
-"""
+'''
     main_path = base / "cmd" / "main"
     main_path.write_text(main_script, encoding="utf-8")
     try:
@@ -168,8 +217,12 @@ esac
     except Exception:
         pass
 
-    for name in ["install_init", "install_callback", "upgrade_init", "upgrade_callback",
-                 "uninstall_init", "uninstall_callback", "config_init", "config_callback"]:
+    for name in [
+        "install_init", "install_callback",
+        "upgrade_init", "upgrade_callback",
+        "uninstall_init", "uninstall_callback",
+        "config_init", "config_callback"
+    ]:
         p = base / "cmd" / name
         p.write_text("#!/bin/bash\nexit 0\n", encoding="utf-8")
         try:
@@ -203,7 +256,7 @@ esac
     if icon_img:
         process_icon(icon_img, base)
     else:
-        # 创建最小有效 PNG（1x1 透明），避免空文件导致问题
+        # 创建有效 PNG，避免空文件导致问题
         from PIL import Image as PILImage
         tiny = PILImage.new("RGBA", (64, 64), (0, 0, 0, 0))
         tiny.save(base / "ICON.PNG", format="PNG")
@@ -215,9 +268,6 @@ esac
             tiny.save(ui_images / "icon_64.png", format="PNG")
             tiny2.save(ui_images / "icon_256.png", format="PNG")
 
-    # 7. wizard
-    (base / "wizard" / "install").write_text("[]", encoding="utf-8")
-    (base / "wizard" / "uninstall").write_text("[]", encoding="utf-8")
 
 def make_zip(src_dir: Path) -> bytes:
     buf = io.BytesIO()
@@ -229,6 +279,7 @@ def make_zip(src_dir: Path) -> bytes:
                 zf.write(full, arcname)
     buf.seek(0)
     return buf.getvalue()
+
 
 def find_fpk_files(search_dirs: List[Path], appname: str) -> List[Path]:
     results = []
@@ -242,10 +293,11 @@ def find_fpk_files(search_dirs: List[Path], appname: str) -> List[Path]:
     unique = list({str(p.resolve()): p for p in results}.values())
     return unique
 
+
 # ==================== 页面 ====================
 
 st.title("📦 飞牛 fnOS Docker Compose → .fpk 打包工具")
-st.markdown("固定目录生成，避免临时目录问题")
+st.markdown("自行下载对应的二进制文件到Pack")
 st.divider()
 
 col1, col2 = st.columns([1, 1])
@@ -281,7 +333,7 @@ if generate_btn:
         st.error("请先上传 docker-compose.yml！")
         st.stop()
 
-    if not appname.replace("_", "").isalnum() or not appname[0].isalpha():
+    if not appname or not appname.replace("_", "").isalnum() or not appname[0].isalpha():
         st.error("appname 格式不正确")
         st.stop()
 
