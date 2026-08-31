@@ -21,4 +21,4 @@ WebUI 工具：上传 docker-compose.yml + 图标，一键生成可在飞牛应�
 - 下载：
 - fnpack-1.2.3-linux-amd64（x86 机器）
 - 或 fnpack-1.2.3-linux-arm64（ARM 机器）
-- 下载后放到宿主机fnpack路径
+- 下载后**改名**为**fnpac**k放到宿主机fnpack路径
